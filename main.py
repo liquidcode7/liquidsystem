@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 import bypass
+import recommender
 import traffic
 from client import PiholeClient
 
@@ -17,9 +18,10 @@ console = Console()
 async def _run() -> None:
     async with PiholeClient() as client:
         console.print("[bold cyan]pihole-audit[/] — fetching data…")
-        traffic_data, bypass_data = await asyncio.gather(
+        traffic_data, bypass_data, rec_data = await asyncio.gather(
             traffic.fetch(client),
             bypass.fetch(client),
+            recommender.fetch(client),
         )
 
     # Summary
@@ -87,6 +89,25 @@ async def _run() -> None:
         console.print(f"\n  [yellow]⚠ {len(flagged)} client(s) have suspiciously low query counts:[/]")
         for s in flagged:
             console.print(f"    {s.ip}  →  {s.query_count} queries  ({s.pct_of_average:.0%} of avg)")
+
+    # --- Blocklist Recommendations ---
+    console.print(f"\n[bold]Blocklist Recommendations[/]  "
+                  f"[dim](scanned {rec_data.queries_scanned:,} allowed queries)[/]")
+
+    if not rec_data.recommendations:
+        console.print("  [green]No known tracking/ad domains found in allowed queries.[/]")
+    else:
+        console.print(f"  Found [red]{len(rec_data.recommendations)}[/] domains across "
+                      f"[yellow]{len(rec_data.by_category)}[/] categories you should consider blocking.\n")
+        for category, recs in sorted(rec_data.by_category.items()):
+            _print_table(
+                category,
+                ["Domain", "Queries", "Clients"],
+                [
+                    (r.domain, str(r.count), ", ".join(r.clients[:3]))
+                    for r in recs
+                ],
+            )
 
 
 def _print_table(title: str, headers: list[str], rows: list[tuple[str, ...]]) -> None:
