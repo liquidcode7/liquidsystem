@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi-hole Audit Report — {{ generated_at }}</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --green: #4ade80;
+    --yellow: #facc15;
+    --red: #f87171;
+    --orange: #fb923c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  h1 { font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+  h2 { font-size: 1.1rem; font-weight: 600; color: var(--text); margin-bottom: .75rem; }
+  h3 { font-size: .95rem; font-weight: 600; color: var(--muted); margin-bottom: .5rem; }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 1.25rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header .subtitle { color: var(--muted); font-size: .85rem; }
+
+  nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: .5rem 2rem;
+    display: flex;
+    gap: 1.5rem;
+  }
+  nav a {
+    color: var(--muted);
+    font-size: .85rem;
+    font-weight: 500;
+    padding: .25rem 0;
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+  }
+  nav a:hover { color: var(--text); border-bottom-color: var(--accent); }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+  section { margin-bottom: 3rem; scroll-margin-top: 80px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  /* Stat grid */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+  }
+  .stat .value { font-size: 1.6rem; font-weight: 700; color: var(--accent); }
+  .stat .label { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: .25rem; }
+
+  /* Progress bar */
+  .bar-wrap { background: var(--border); border-radius: 99px; height: 6px; overflow: hidden; margin: .4rem 0; }
+  .bar { height: 100%; border-radius: 99px; background: var(--accent); }
+  .bar.red { background: var(--red); }
+  .bar.green { background: var(--green); }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; margin-bottom: 1rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  thead tr { border-bottom: 2px solid var(--border); }
+  th { text-align: left; padding: .5rem .75rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  td { padding: .45rem .75rem; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,.03); }
+  td.mono { font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: .8rem; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: .15rem .55rem;
+    border-radius: 99px;
+    font-size: .75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge-red { background: rgba(248,113,113,.15); color: var(--red); }
+  .badge-yellow { background: rgba(250,204,21,.15); color: var(--yellow); }
+  .badge-green { background: rgba(74,222,128,.15); color: var(--green); }
+  .badge-blue { background: rgba(56,189,248,.15); color: var(--accent); }
+  .badge-orange { background: rgba(251,146,60,.15); color: var(--orange); }
+
+  .empty { color: var(--muted); font-style: italic; padding: .5rem 0; }
+  .section-meta { color: var(--muted); font-size: .8rem; margin-bottom: 1rem; }
+
+  /* Category blocks for recommendations */
+  .category-block { margin-bottom: 1.5rem; }
+  .category-block h3 {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: .9rem;
+    color: var(--yellow);
+    margin-bottom: .5rem;
+  }
+
+  footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--muted);
+    font-size: .8rem;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Pi-hole Audit</h1>
+    <div class="subtitle">Generated {{ generated_at }}</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:.85rem;color:var(--muted)">
+      {{ traffic.summary.total_clients }} clients &nbsp;·&nbsp;
+      {{ "{:,}".format(traffic.summary.gravity_domains) }} gravity domains
+    </div>
+  </div>
+</header>
+
+<nav>
+  <a href="#traffic">Traffic Review</a>
+  <a href="#bypass">DNS Bypass</a>
+  <a href="#recommendations">Blocklist Recs</a>
+</nav>
+
+<main>
+
+<!-- ═══════════════════════════════════════════════ TRAFFIC REVIEW -->
+<section id="traffic">
+  <h2>Traffic Review</h2>
+
+  <div class="stat-grid">
+    <div class="stat">
+      <div class="value">{{ "{:,}".format(traffic.summary.total) }}</div>
+      <div class="label">Total Queries</div>
+    </div>
+    <div class="stat">
+      <div class="value" style="color:var(--red)">{{ "{:.1f}".format(traffic.summary.percent_blocked) }}%</div>
+      <div class="label">Blocked</div>
+    </div>
+    <div class="stat">
+      <div class="value">{{ "{:,}".format(traffic.summary.blocked) }}</div>
+      <div class="label">Blocked Queries</div>
+    </div>
+    <div class="stat">
+      <div class="value" style="color:var(--green)">{{ "{:,}".format(traffic.summary.allowed) }}</div>
+      <div class="label">Allowed Queries</div>
+    </div>
+    <div class="stat">
+      <div class="value">{{ "{:,}".format(traffic.summary.cached) }}</div>
+      <div class="label">Cached</div>
+    </div>
+    <div class="stat">
+      <div class="value">{{ "{:,}".format(traffic.summary.forwarded) }}</div>
+      <div class="label">Forwarded</div>
+    </div>
+    <div class="stat">
+      <div class="value">{{ "{:,}".format(traffic.summary.unique_domains) }}</div>
+      <div class="label">Unique Domains</div>
+    </div>
+    <div class="stat">
+      <div class="value">{{ traffic.summary.active_clients }}</div>
+      <div class="label">Active Clients</div>
+    </div>
+  </div>
+
+  <!-- Block rate bar -->
+  <div class="card" style="padding:.75rem 1.25rem">
+    <div style="display:flex;justify-content:space-between;margin-bottom:.25rem">
+      <span style="font-size:.8rem;color:var(--muted)">Block rate</span>
+      <span style="font-size:.8rem;font-weight:600">{{ "{:.1f}".format(traffic.summary.percent_blocked) }}%</span>
+    </div>
+    <div class="bar-wrap">
+      <div class="bar red" style="width:{{ traffic.summary.percent_blocked }}%"></div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+
+    <!-- Top Allowed -->
+    <div class="card">
+      <h3>Top Allowed Domains</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Domain</th><th style="text-align:right">Queries</th></tr></thead>
+          <tbody>
+          {% for d in traffic.top_allowed %}
+          <tr>
+            <td class="mono">{{ d.domain }}</td>
+            <td class="num">{{ "{:,}".format(d.count) }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Top Blocked -->
+    <div class="card">
+      <h3>Top Blocked Domains</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Domain</th><th style="text-align:right">Queries</th></tr></thead>
+          <tbody>
+          {% for d in traffic.top_blocked %}
+          <tr>
+            <td class="mono">{{ d.domain }}</td>
+            <td class="num">{{ "{:,}".format(d.count) }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Top Clients -->
+  <div class="card">
+    <h3>Top Clients</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>IP</th><th>Name</th><th style="text-align:right">Queries</th><th style="text-align:right">Share</th></tr></thead>
+        <tbody>
+        {% for c in traffic.top_clients %}
+        <tr>
+          <td class="mono">{{ c.client }}</td>
+          <td>{{ c.name if c.name != c.client else "—" }}</td>
+          <td class="num">{{ "{:,}".format(c.count) }}</td>
+          <td class="num" style="color:var(--muted)">
+            {{ "{:.1f}".format(c.count / traffic.summary.total * 100) }}%
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════ BYPASS DETECTION -->
+<section id="bypass">
+  <h2>DNS Bypass Detection</h2>
+  <p class="section-meta">Scanned {{ "{:,}".format(bypass.queries_scanned) }} queries</p>
+
+  {% if not bypass.findings %}
+  <div class="card"><p class="empty">No bypass indicators detected.</p></div>
+  {% else %}
+
+  <!-- DoH / DoT lookups -->
+  <div class="card">
+    <h3>DoH / DoT Provider Lookups
+      <span class="badge {% if bypass_doh %}badge-red{% else %}badge-green{% endif %}">
+        {{ bypass_doh | length }}
+      </span>
+    </h3>
+    {% if bypass_doh %}
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">
+      These clients queried encrypted DNS provider hostnames — they may be routing DNS around Pi-hole.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Client IP</th><th>Provider</th><th style="text-align:right">Hits</th></tr></thead>
+        <tbody>
+        {% for f in bypass_doh %}
+        <tr>
+          <td class="mono">{{ f.client_ip }}</td>
+          <td><span class="badge badge-red">{{ f.detail }}</span></td>
+          <td class="num">{{ f.count }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty">None detected.</p>
+    {% endif %}
+  </div>
+
+  <!-- PTR lookups -->
+  <div class="card">
+    <h3>PTR Lookups for Public DNS IPs
+      <span class="badge {% if bypass_ptr %}badge-yellow{% else %}badge-green{% endif %}">
+        {{ bypass_ptr | length }}
+      </span>
+    </h3>
+    {% if bypass_ptr %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Client IP</th><th>Detail</th><th style="text-align:right">Hits</th></tr></thead>
+        <tbody>
+        {% for f in bypass_ptr %}
+        <tr>
+          <td class="mono">{{ f.client_ip }}</td>
+          <td>{{ f.detail }}</td>
+          <td class="num">{{ f.count }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty">None detected.</p>
+    {% endif %}
+  </div>
+
+  <!-- Low query count -->
+  <div class="card">
+    <h3>Low Query Count Clients
+      <span class="badge {% if bypass_low %}badge-yellow{% else %}badge-green{% endif %}">
+        {{ bypass_low | length }}
+      </span>
+    </h3>
+    {% if bypass_low %}
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:.75rem">
+      Clients with &lt;10% of the network query average — may be using hardcoded DNS servers.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Client IP</th><th style="text-align:right">Queries</th><th style="text-align:right">% of Avg</th></tr></thead>
+        <tbody>
+        {% for f in bypass_low %}
+        <tr>
+          <td class="mono">{{ f.client_ip }}</td>
+          <td class="num">{{ f.count }}</td>
+          <td class="num" style="color:var(--yellow)">
+            {% for s in bypass.client_stats if s.ip == f.client_ip %}
+              {{ "{:.0f}".format(s.pct_of_average * 100) }}%
+            {% endfor %}
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="empty">No low-query-count clients detected.</p>
+    {% endif %}
+  </div>
+
+  {% endif %}
+</section>
+
+<!-- ═══════════════════════════════════════════════ RECOMMENDATIONS -->
+<section id="recommendations">
+  <h2>Blocklist Recommendations</h2>
+  <p class="section-meta">
+    Scanned {{ "{:,}".format(rec.queries_scanned) }} allowed queries &nbsp;·&nbsp;
+    {% if rec.recommendations %}
+      Found <strong style="color:var(--red)">{{ rec.recommendations | length }}</strong> domains
+      across <strong style="color:var(--yellow)">{{ rec.by_category | length }}</strong> categories
+    {% else %}
+      No tracking domains found
+    {% endif %}
+  </p>
+
+  {% if not rec.recommendations %}
+  <div class="card"><p class="empty">No known tracking or ad domains found in allowed queries.</p></div>
+  {% else %}
+
+  {% for category, recs in rec.by_category.items() | sort %}
+  <div class="category-block">
+    <div class="card">
+      <h3>
+        {{ category }}
+        <span class="badge badge-orange">{{ recs | length }} domain{% if recs | length != 1 %}s{% endif %}</span>
+      </h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Domain</th><th style="text-align:right">Queries</th><th>Clients</th></tr></thead>
+          <tbody>
+          {% for r in recs %}
+          <tr>
+            <td class="mono">{{ r.domain }}</td>
+            <td class="num">{{ "{:,}".format(r.count) }}</td>
+            <td style="color:var(--muted);font-size:.8rem">{{ r.clients[:5] | join(", ") }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  {% endif %}
+</section>
+
+</main>
+
+<footer>
+  Pi-hole Audit &nbsp;·&nbsp; {{ generated_at }} &nbsp;·&nbsp;
+  {{ "{:,}".format(traffic.summary.total) }} total queries analyzed
+</footer>
+
+</body>
+</html>

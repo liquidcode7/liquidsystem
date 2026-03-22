@@ -9,6 +9,7 @@ from rich.table import Table
 
 import bypass
 import recommender
+import report
 import traffic
 from client import PiholeClient
 
@@ -84,10 +85,10 @@ async def _run() -> None:
         )
 
     # Client query distribution (flag low-count clients)
-    flagged = [s for s in bypass_data.client_stats if s.flagged]
-    if flagged:
-        console.print(f"\n  [yellow]⚠ {len(flagged)} client(s) have suspiciously low query counts:[/]")
-        for s in flagged:
+    flagged_clients = [s for s in bypass_data.client_stats if s.flagged]
+    if flagged_clients:
+        console.print(f"\n  [yellow]⚠ {len(flagged_clients)} client(s) have suspiciously low query counts:[/]")
+        for s in flagged_clients:
             console.print(f"    {s.ip}  →  {s.query_count} queries  ({s.pct_of_average:.0%} of avg)")
 
     # --- Blocklist Recommendations ---
@@ -108,6 +109,10 @@ async def _run() -> None:
                     for r in recs
                 ],
             )
+
+    # --- HTML Report ---
+    out = report.render_html(traffic_data, bypass_data, rec_data)
+    console.print(f"\n[bold green]✓ Report saved:[/] {out}")
 
 
 def _print_table(title: str, headers: list[str], rows: list[tuple[str, ...]]) -> None:

@@ -12,8 +12,8 @@ wheels/
 # Secrets
 .env
 
-# Reports
-*.html
+# Generated reports (root-level only, not templates/)
+/pihole-audit-*.html
 
 # uv
 .python-version
