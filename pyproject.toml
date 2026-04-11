@@ -1,11 +1,13 @@
 [project]
-name = "pihole-audit"
-version = "0.1.0"
-description = "Add your description here"
+name = "liquidsystem"
+version = "0.2.0"
+description = "LiquidLab Pi-hole audit dashboard — FastAPI web app"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 dependencies = [
     "anthropic>=0.50.0",
+    "apscheduler>=3.10,<4",
+    "fastapi[standard]>=0.111.0",
     "httpx>=0.28.1",
     "jinja2>=3.1.6",
     "python-dotenv>=1.2.2",
