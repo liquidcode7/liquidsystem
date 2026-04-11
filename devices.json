@@ -1,0 +1,5 @@
+{
+    "192.168.1.1": "OPNsense Router",
+    "192.168.1.4": "Arch Workstation",
+    "192.168.1.24": "Pi-hole CT101"
+}
