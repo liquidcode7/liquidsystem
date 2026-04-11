@@ -8,6 +8,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from bypass import BypassData
+from device_identifier import DeviceInfo, NetworkRiskSummary
 from recommender import RecommenderData
 from traffic import TrafficData
 
@@ -21,6 +22,9 @@ def render_html(
     client_names: dict[str, str] | None = None,
     output_path: Path | None = None,
     assessment_text: str | None = None,
+    device_map: dict[str, DeviceInfo] | None = None,
+    risk_summary: NetworkRiskSummary | None = None,
+    chat_history: list[dict] | None = None,
 ) -> Path:
     """Render a self-contained HTML report and write it to disk.
 
@@ -37,6 +41,13 @@ def render_html(
     template = env.get_template("report.html")
 
     names = client_names or {}
+    dmap = device_map or {}
+
+    # Sort devices for the report: high risk first, then by IP
+    sorted_devices = sorted(
+        dmap.values(),
+        key=lambda d: ({"high": 0, "medium": 1, "low": 2, "minimal": 3}.get(d.privacy_risk, 4), d.ip),
+    )
 
     html = template.render(
         generated_at=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -48,6 +59,10 @@ def render_html(
         bypass_ptr=[f for f in bypass_data.findings if f.method == "ptr_lookup"],
         bypass_low=[f for f in bypass_data.findings if f.method == "low_query_count"],
         assessment_text=assessment_text,
+        device_map=dmap,
+        sorted_devices=sorted_devices,
+        risk_summary=risk_summary,
+        chat_history=chat_history or [],
     )
 
     output_path.write_text(html, encoding="utf-8")

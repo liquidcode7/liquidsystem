@@ -12,12 +12,13 @@ import anthropic
 from dotenv import load_dotenv
 
 from bypass import BypassData
+from device_identifier import DeviceInfo, NetworkRiskSummary, network_risk_summary
 from recommender import RecommenderData
 from traffic import TrafficData
 
 load_dotenv()
 
-_MODEL = "claude-sonnet-4-6"
+MODEL = "claude-sonnet-4-6"
 _MAX_TOKENS = 1500
 
 
@@ -94,10 +95,58 @@ def _build_findings_summary(
     return "\n".join(lines)
 
 
+def _build_device_summary(device_map: dict[str, DeviceInfo]) -> str:
+    lines: list[str] = []
+    lines.append("\n=== DEVICE INVENTORY ===")
+    risk_summary = network_risk_summary(device_map)
+    lines.append(
+        f"Total devices: {risk_summary.total_devices}  "
+        f"(identified: {risk_summary.identified}, unknown: {risk_summary.unknown}, "
+        f"manual: {risk_summary.manual})"
+    )
+    lines.append(
+        f"Privacy risk breakdown — high: {risk_summary.high_risk}, "
+        f"medium: {risk_summary.medium_risk}, low: {risk_summary.low_risk}, "
+        f"minimal: {risk_summary.minimal_risk}"
+    )
+    lines.append(f"Overall network privacy risk: {risk_summary.overall_risk.upper()}")
+    lines.append("")
+
+    sorted_devices = sorted(
+        device_map.values(),
+        key=lambda d: ({"high": 0, "medium": 1, "low": 2, "minimal": 3}.get(d.privacy_risk, 4), d.ip),
+    )
+    for info in sorted_devices:
+        label = info.hostname if info.hostname != info.ip else info.ip
+        conf_str = "manual override" if info.manual_override else f"{info.confidence:.0%} confidence"
+        alts = ""
+        if info.alternatives:
+            alts = "  [alt: " + ", ".join(f"{t} ({c:.0%})" for t, c in info.alternatives) + "]"
+        lines.append(
+            f"  {info.ip} ({label}): {info.device_type}  "
+            f"[{conf_str}]  risk={info.privacy_risk}{alts}"
+        )
+    return "\n".join(lines)
+
+
+def build_audit_context(
+    traffic_data: TrafficData,
+    bypass_data: BypassData,
+    rec_data: RecommenderData,
+    device_map: dict[str, DeviceInfo] | None = None,
+) -> str:
+    """Return the full audit data as a plain-text string for embedding in prompts."""
+    findings = _build_findings_summary(traffic_data, bypass_data, rec_data)
+    if device_map:
+        findings += _build_device_summary(device_map)
+    return findings
+
+
 def get_ai_assessment(
     traffic_data: TrafficData,
     bypass_data: BypassData,
     rec_data: RecommenderData,
+    device_map: dict[str, DeviceInfo] | None = None,
 ) -> str:
     """Stream an AI security assessment from Claude and return the full text.
 
@@ -108,7 +157,7 @@ def get_ai_assessment(
     if not api_key:
         return "AI assessment skipped — ANTHROPIC_API_KEY not set in .env."
 
-    findings = _build_findings_summary(traffic_data, bypass_data, rec_data)
+    findings = build_audit_context(traffic_data, bypass_data, rec_data, device_map)
 
     system_prompt = (
         "You are a network security and privacy analyst. The user is a technically "
@@ -139,7 +188,7 @@ def get_ai_assessment(
     full_text: list[str] = []
 
     with client.messages.stream(
-        model=_MODEL,
+        model=MODEL,
         max_tokens=_MAX_TOKENS,
         system=system_prompt,
         messages=[{"role": "user", "content": user_prompt}],

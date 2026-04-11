@@ -1,6 +1,19 @@
 {%- macro client_label(ip) -%}
-  {%- set name = client_names.get(ip, "") -%}
-  {%- if name -%}{{ name }} <span style="color:var(--muted);font-size:.75rem">({{ ip }})</span>{%- else -%}{{ ip }}{%- endif -%}
+  {%- set dev = device_map.get(ip) -%}
+  {%- if dev and dev.device_type != "Unknown device" -%}
+    {{ dev.device_type }} <span style="color:var(--muted);font-size:.75rem">({{ ip }})</span>
+  {%- else -%}
+    {%- set name = client_names.get(ip, "") -%}
+    {%- if name -%}{{ name }} <span style="color:var(--muted);font-size:.75rem">({{ ip }})</span>{%- else -%}{{ ip }}{%- endif -%}
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- macro risk_badge(level) -%}
+  {%- if level == "high" -%}<span class="badge badge-red">high</span>
+  {%- elif level == "medium" -%}<span class="badge badge-yellow">medium</span>
+  {%- elif level == "low" -%}<span class="badge badge-green">low</span>
+  {%- else -%}<span class="badge badge-blue">minimal</span>
+  {%- endif -%}
 {%- endmacro -%}
 <!DOCTYPE html>
 <html lang="en">
@@ -177,6 +190,56 @@
   }
   .ai-body strong { color: var(--accent); }
   .ai-skipped { color: var(--muted); font-style: italic; }
+
+  /* ── conversation transcript ── */
+  #conversation { margin-top: 2rem; }
+  .chat-card {
+    background: var(--surface);
+    border: 1px solid #0ea5e955;
+    border-left: 3px solid #38bdf8;
+    border-radius: 8px;
+    padding: 1.5rem;
+  }
+  .chat-card h2 { color: var(--accent); }
+  .chat-label {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .75rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(56,189,248,.1);
+    border: 1px solid rgba(56,189,248,.2);
+    border-radius: 99px;
+    padding: .2rem .65rem;
+    margin-bottom: 1.25rem;
+  }
+  .chat-turn { margin-bottom: 1.25rem; }
+  .chat-turn:last-child { margin-bottom: 0; }
+  .chat-role {
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    margin-bottom: .35rem;
+  }
+  .chat-role.user  { color: var(--yellow); }
+  .chat-role.claude { color: var(--accent); }
+  .chat-bubble {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: .75rem 1rem;
+    white-space: pre-wrap;
+    font-size: .85rem;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .chat-sep {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1rem 0;
+  }
 </style>
 </head>
 <body>
@@ -196,9 +259,11 @@
 
 <nav>
   <a href="#traffic">Traffic Review</a>
+  <a href="#devices">Device Inventory</a>
   <a href="#bypass">DNS Bypass</a>
   <a href="#recommendations">Blocklist Recs</a>
   <a href="#ai-assessment">AI Assessment</a>
+  {% if chat_history %}<a href="#conversation">Conversation</a>{% endif %}
 </nav>
 
 <main>
@@ -316,6 +381,113 @@
   </div>
 
 </section>
+
+<!-- ═══════════════════════════════════════════════ DEVICE INVENTORY -->
+{% if sorted_devices %}
+<section id="devices">
+  <h2>Device Inventory</h2>
+
+  {% if risk_summary %}
+  <!-- Risk summary bar -->
+  <div class="stat-grid" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-bottom:1.5rem">
+    <div class="stat">
+      <div class="value">{{ risk_summary.total_devices }}</div>
+      <div class="label">Total Devices</div>
+    </div>
+    <div class="stat">
+      <div class="value" style="color:var(--green)">{{ risk_summary.identified }}</div>
+      <div class="label">Identified</div>
+    </div>
+    <div class="stat">
+      <div class="value" style="color:var(--yellow)">{{ risk_summary.unknown }}</div>
+      <div class="label">Unknown</div>
+    </div>
+    <div class="stat">
+      <div class="value" style="color:var(--red)">{{ risk_summary.high_risk }}</div>
+      <div class="label">High Risk</div>
+    </div>
+    <div class="stat">
+      <div class="value" style="color:var(--yellow)">{{ risk_summary.medium_risk }}</div>
+      <div class="label">Medium Risk</div>
+    </div>
+    <div class="stat">
+      <div class="value" style="color:var(--green)">{{ risk_summary.low_risk }}</div>
+      <div class="label">Low Risk</div>
+    </div>
+    <div class="stat">
+      <div class="value" style="color:var(--accent)">{{ risk_summary.minimal_risk }}</div>
+      <div class="label">Minimal Risk</div>
+    </div>
+    <div class="stat">
+      <div class="value"
+        {% if risk_summary.overall_risk == "high" %}style="color:var(--red)"
+        {% elif risk_summary.overall_risk == "medium" %}style="color:var(--yellow)"
+        {% elif risk_summary.overall_risk == "low" %}style="color:var(--green)"
+        {% else %}style="color:var(--accent)"{% endif %}>
+        {{ risk_summary.overall_risk | upper }}
+      </div>
+      <div class="label">Network Risk</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>IP</th>
+            <th>Hostname</th>
+            <th>Device Type</th>
+            <th style="text-align:right">Confidence</th>
+            <th>Privacy Risk</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for dev in sorted_devices %}
+        <tr>
+          <td class="mono">{{ dev.ip }}</td>
+          <td style="color:var(--muted);font-size:.8rem">
+            {% if dev.hostname != dev.ip %}{{ dev.hostname }}{% endif %}
+          </td>
+          <td>
+            {% if dev.device_type == "Unknown device" %}
+              <span style="color:var(--yellow)">⚠ Unknown device</span>
+              <span style="font-size:.75rem;color:var(--muted)"> — add to devices.json</span>
+            {% elif dev.manual_override %}
+              {{ dev.device_type }}
+              <span class="badge badge-blue" style="margin-left:.35rem">manual</span>
+            {% else %}
+              {{ dev.device_type }}
+            {% endif %}
+            {% if dev.alternatives %}
+            <div style="font-size:.72rem;color:var(--muted);margin-top:.2rem">
+              alt:
+              {% for alt_type, alt_conf in dev.alternatives %}
+                {{ alt_type }} ({{ "{:.0%}".format(alt_conf) }}){% if not loop.last %}, {% endif %}
+              {% endfor %}
+            </div>
+            {% endif %}
+          </td>
+          <td class="num">
+            {% if dev.manual_override %}
+              <span class="badge badge-blue">manual</span>
+            {% else %}
+              {{ "{:.0%}".format(dev.confidence) }}
+            {% endif %}
+          </td>
+          <td>{{ risk_badge(dev.privacy_risk) }}</td>
+          <td style="font-size:.78rem;color:var(--muted);max-width:320px">{{ dev.notes }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</section>
+{% endif %}
 
 <!-- ═══════════════════════════════════════════════ BYPASS DETECTION -->
 <section id="bypass">
@@ -479,6 +651,27 @@
     {% endif %}
   </div>
 </section>
+
+{% if chat_history %}
+<!-- ═══════════════════════════════════════════ CONVERSATION TRANSCRIPT -->
+<section id="conversation">
+  <div class="chat-card">
+    <h2>Conversation Transcript</h2>
+    <div class="chat-label">&#x1F4AC; Interactive session — {{ chat_history | length // 2 }} exchange(s)</div>
+    {% for msg in chat_history %}
+    {% if not loop.first %}<hr class="chat-sep">{% endif %}
+    <div class="chat-turn">
+      {% if msg.role == "user" %}
+      <div class="chat-role user">You</div>
+      {% else %}
+      <div class="chat-role claude">Claude</div>
+      {% endif %}
+      <div class="chat-bubble">{{ msg.content }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 
 </main>
 
