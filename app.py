@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import log_cleaner
+import notifier
 from fail2ban import CONTAINERS
 from runner import run_analysis
 
@@ -63,6 +64,7 @@ async def _execute_run() -> None:
         report = await run_analysis()
         _save_report(report)
         _run_status["last_completed"] = report["id"]
+        await notifier.notify_report_complete(report)
     except Exception as exc:
         _run_status["error"] = str(exc)
     finally:
