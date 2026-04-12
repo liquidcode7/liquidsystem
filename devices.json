@@ -1,5 +1,12 @@
 {
-    "192.168.1.1": "OPNsense Router",
-    "192.168.1.4": "Arch Workstation",
-    "192.168.1.24": "Pi-hole CT101"
+    "192.168.1.1":  "OPNsense Router",
+    "192.168.1.4":  "Arch Workstation",
+    "192.168.1.21": "Jellyfin Media Server",
+    "192.168.1.22": "Immich Photo Server",
+    "192.168.1.23": "Audiobookshelf Server",
+    "192.168.1.24": "Pi-hole DNS CT101",
+    "192.168.1.25": "Nextcloud Server",
+    "192.168.1.26": "Ansible CT",
+    "192.168.1.27": "Traefik Reverse Proxy",
+    "192.168.1.28": "LiquidSystem"
 }

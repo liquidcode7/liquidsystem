@@ -13,7 +13,7 @@ from pathlib import Path
 import anthropic
 from dotenv import load_dotenv
 
-from bypass import BypassData
+from bypass import KNOWN_INFRASTRUCTURE, BypassData
 from device_identifier import DeviceInfo, NetworkRiskSummary, network_risk_summary
 from recommender import RecommenderData
 from traffic import TrafficData
@@ -60,12 +60,15 @@ def _build_findings_summary(
         lines.append(f"  {label}: {c.count:,} queries")
 
     lines.append(f"\n=== DNS BYPASS DETECTION ({bypass_data.queries_scanned:,} queries scanned) ===")
-    if not bypass_data.findings:
+
+    doh         = [f for f in bypass_data.findings if f.method == "doh_lookup"]
+    ptr         = [f for f in bypass_data.findings if f.method == "ptr_lookup"]
+    low_suspect = [f for f in bypass_data.findings if f.method == "low_query_count"]
+    low_infra   = getattr(bypass_data, "infra_low_query", [])
+
+    if not doh and not ptr and not low_suspect and not low_infra:
         lines.append("  No bypass indicators detected.")
     else:
-        doh = [f for f in bypass_data.findings if f.method == "doh_lookup"]
-        ptr = [f for f in bypass_data.findings if f.method == "ptr_lookup"]
-        low = [f for f in bypass_data.findings if f.method == "low_query_count"]
         if doh:
             lines.append(f"DoH/DoT lookup attempts ({len(doh)} finding(s)):")
             for f in doh:
@@ -74,10 +77,24 @@ def _build_findings_summary(
             lines.append(f"PTR lookups for public DNS IPs ({len(ptr)} finding(s)):")
             for f in ptr:
                 lines.append(f"  {f.client_ip} → {f.detail} ({f.count} hits)")
-        if low:
-            lines.append(f"Low query count (potential bypass) ({len(low)} client(s)):")
-            for f in low:
+
+        lines.append(f"\n  [CONFIRMED SUSPECTS — unknown/unidentified devices with low query counts]")
+        if low_suspect:
+            for f in low_suspect:
                 lines.append(f"  {f.client_ip}: {f.count} queries — {f.detail}")
+        else:
+            lines.append("  None.")
+
+        lines.append(f"\n  [KNOWN INFRASTRUCTURE — low query count is EXPECTED, NOT a bypass concern]")
+        if low_infra:
+            for f in low_infra:
+                role = KNOWN_INFRASTRUCTURE.get(f.client_ip, "known host")
+                lines.append(
+                    f"  {f.client_ip} ({role}): {f.count} queries — "
+                    "uses internal IPs, low DNS is normal"
+                )
+        else:
+            lines.append("  None flagged.")
 
     lines.append(f"\n=== BLOCKLIST RECOMMENDATIONS ({rec_data.queries_scanned:,} allowed queries scanned) ===")
     if not rec_data.recommendations:
@@ -361,7 +378,13 @@ def get_ai_assessment(
         "self-hosted services (Jellyfin, Immich, Nextcloud, Audiobookshelf, Traefik). "
         "They are privacy-focused and want specific, actionable advice — not generic tips. "
         "Reference actual IPs, domains, counts, and container names from the data. "
-        "Be direct and concise. Do not pad your response."
+        "Be direct and concise. Do not pad your response.\n\n"
+        "IMPORTANT — DNS bypass classification: The bypass detection data contains two "
+        "clearly labeled categories. 'CONFIRMED SUSPECTS' are unknown devices with low DNS "
+        "query counts and should be investigated. 'KNOWN INFRASTRUCTURE' entries (jellyfin, "
+        "immich, audiobookshelf, nextcloud, ansible, traefik, liquidsystem) have low query "
+        "counts because they resolve hosts by IP internally — this is expected behavior and "
+        "is NOT a bypass concern. Do not flag known infrastructure as DNS bypass suspects."
     )
 
     # Build data-aware prompt sections

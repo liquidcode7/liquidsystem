@@ -57,9 +57,26 @@ _PTR_SUFFIXES: dict[str, str] = {
 # Fraction of network-average queries below which a client is flagged
 LOW_QUERY_THRESHOLD = 0.10
 
-# IPs never flagged for low query count (routers, gateways, localhost).
+# Known homelab infrastructure — low query counts are expected because these
+# services resolve hosts by IP internally rather than via DNS.
+KNOWN_INFRASTRUCTURE: dict[str, str] = {
+    "192.168.1.21": "jellyfin",
+    "192.168.1.22": "immich",
+    "192.168.1.23": "audiobookshelf",
+    "192.168.1.25": "nextcloud",
+    "192.168.1.26": "ansible",
+    "192.168.1.27": "traefik",
+    "192.168.1.28": "liquidsystem",
+}
+
+# IPs completely excluded from low-query flagging (DNS server itself, gateways, localhost).
 # Extend via PIHOLE_BYPASS_IGNORE_IPS=192.168.1.1,10.0.0.1 in .env
-_DEFAULT_IGNORE_IPS: frozenset[str] = frozenset({"192.168.1.1", "127.0.0.1", "::1"})
+_DEFAULT_IGNORE_IPS: frozenset[str] = frozenset({
+    "192.168.1.1",   # OPNsense router/gateway
+    "192.168.1.24",  # Pi-hole — IS the DNS server, will always have low client queries
+    "127.0.0.1",
+    "::1",
+})
 
 def _ignore_ips() -> frozenset[str]:
     extra = {
@@ -93,7 +110,8 @@ class ClientQueryStat:
 
 @dataclass
 class BypassData:
-    findings: list[BypassFinding]
+    findings: list[BypassFinding]           # DoH/PTR hits + low-query for unknown IPs
+    infra_low_query: list[BypassFinding]    # low-query for known infrastructure (expected)
     client_stats: list[ClientQueryStat]
     queries_scanned: int
 
@@ -114,11 +132,12 @@ async def fetch(
     )
 
     findings = _detect_doh_and_ptr(queries)
+    infra_low_query: list[BypassFinding] = []
     client_stats = _detect_low_query_clients(clients_raw, client_names or {})
 
     for stat in client_stats:
         if stat.flagged:
-            findings.append(BypassFinding(
+            finding = BypassFinding(
                 client_ip=stat.ip,
                 method="low_query_count",
                 detail=(
@@ -127,12 +146,18 @@ async def fetch(
                     "may be using hardcoded DNS"
                 ),
                 count=stat.query_count,
-            ))
+            )
+            if stat.ip in KNOWN_INFRASTRUCTURE:
+                infra_low_query.append(finding)
+            else:
+                findings.append(finding)
 
     findings.sort(key=lambda f: f.count, reverse=True)
+    infra_low_query.sort(key=lambda f: f.count, reverse=True)
 
     return BypassData(
         findings=findings,
+        infra_low_query=infra_low_query,
         client_stats=client_stats,
         queries_scanned=len(queries),
     )
