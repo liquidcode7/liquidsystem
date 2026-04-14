@@ -579,6 +579,148 @@
     .text-warning { color: var(--warning); }
     .mt-0 { margin-top: 0; }
 
+    /* ── Chat ── */
+    #tab-chat { display: none; }
+    #tab-chat.active { display: flex; flex-direction: column; height: calc(100vh - 200px); min-height: 500px; }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+    .chat-msg {
+      display: flex;
+      gap: 12px;
+      max-width: 100%;
+    }
+    .chat-msg.user { flex-direction: row-reverse; }
+    .chat-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .chat-msg.user .chat-avatar  { background: var(--accent);  color: #0d1117; }
+    .chat-msg.assistant .chat-avatar { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+    .chat-bubble {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 12px 16px;
+      font-size: 0.85rem;
+      line-height: 1.7;
+      max-width: calc(100% - 48px);
+    }
+    .chat-msg.user .chat-bubble {
+      background: rgba(88,166,255,0.1);
+      border-color: rgba(88,166,255,0.25);
+      color: var(--text);
+    }
+    .chat-bubble .assessment-body { font-size: 0.85rem; }
+    .chat-bubble .assessment-body h1,
+    .chat-bubble .assessment-body h2,
+    .chat-bubble .assessment-body h3 { margin-top: 12px; }
+    .chat-bubble pre {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      overflow-x: auto;
+      font-size: 0.78rem;
+      margin: 8px 0;
+    }
+    .chat-bubble code { font-size: 0.78em; }
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+      padding: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    }
+    #chat-input {
+      flex: 1;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 9px 14px;
+      font-size: 0.85rem;
+      font-family: inherit;
+      resize: none;
+      min-height: 42px;
+      max-height: 120px;
+      line-height: 1.5;
+    }
+    #chat-input:focus { outline: none; border-color: var(--accent); }
+    #chat-input::placeholder { color: var(--dim); }
+    .chat-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px 0;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .chat-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .chat-empty h3 { font-size: 1rem; color: var(--text); margin-bottom: 4px; }
+    .chat-suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      margin-top: 16px;
+    }
+    .chat-suggestion {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .chat-suggestion:hover { border-color: var(--accent); color: var(--accent); }
+    .typing-indicator {
+      display: flex;
+      gap: 4px;
+      padding: 4px 0;
+      align-items: center;
+    }
+    .typing-dot {
+      width: 6px; height: 6px;
+      background: var(--muted);
+      border-radius: 50%;
+      animation: bounce 1.2s infinite;
+    }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30%            { transform: translateY(-6px); }
+    }
+
     /* ── Footer ── */
     footer {
       text-align: center;
@@ -624,6 +766,7 @@
 <nav class="tab-bar" id="tab-bar" style="display:none">
   <button class="tab-btn active" data-tab="dns"    onclick="switchTab('dns')">DNS &amp; Security</button>
   <button class="tab-btn"        data-tab="health" onclick="switchTab('health')">System Health</button>
+  <button class="tab-btn"        data-tab="chat"   onclick="switchTab('chat')">&#x1F4AC; Chat</button>
 </nav>
 
 <main>
@@ -638,7 +781,10 @@
   <div id="report-view" class="hidden">
     <div class="report-meta">
       <span>Report <strong id="report-id-label"></strong></span>
-      <span id="report-ts-label"></span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="report-ts-label"></span>
+        <button class="btn btn-secondary" id="export-btn" onclick="exportReport()" style="font-size:0.78rem;padding:4px 12px">&#8681; Export &amp; Delete</button>
+      </div>
     </div>
 
     <!-- ═══════════════ TAB 1: DNS & Security ═══════════════ -->
@@ -723,6 +869,31 @@
       </div>
 
     </div><!-- /tab-health -->
+
+    <!-- ═══════════════ TAB 3: Chat ═══════════════ -->
+    <div id="tab-chat" class="tab-pane">
+      <div class="chat-toolbar">
+        <span id="chat-context-label">Context: latest report</span>
+        <button class="btn btn-secondary" style="font-size:0.75rem;padding:4px 10px" onclick="resetChat()">&#x21BA; New conversation</button>
+      </div>
+      <div class="chat-messages" id="chat-messages">
+        <div class="chat-empty" id="chat-empty">
+          <h3>Ask Claude about your network</h3>
+          <p>Claude has full context of the latest audit report.</p>
+          <div class="chat-suggestions">
+            <span class="chat-suggestion" onclick="sendSuggestion(this)">What are my top security risks?</span>
+            <span class="chat-suggestion" onclick="sendSuggestion(this)">Which domains should I block first?</span>
+            <span class="chat-suggestion" onclick="sendSuggestion(this)">Are any devices doing DNS bypass?</span>
+            <span class="chat-suggestion" onclick="sendSuggestion(this)">Show me the Pi-hole block commands</span>
+            <span class="chat-suggestion" onclick="sendSuggestion(this)">What's my highest-risk device?</span>
+          </div>
+        </div>
+      </div>
+      <div class="chat-input-row">
+        <textarea id="chat-input" rows="1" placeholder="Ask a follow-up question about your network…" onkeydown="chatKeydown(event)"></textarea>
+        <button class="btn btn-primary" id="chat-send-btn" onclick="sendChat()">Send</button>
+      </div>
+    </div><!-- /tab-chat -->
 
   </div><!-- /report-view -->
 </main>
@@ -847,6 +1018,62 @@ function stopPolling() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 }
 
+// ── Export & Delete ────────────────────────────────────────────────────────
+async function exportReport() {
+  if (!currentReportId) return;
+
+  const btn = document.getElementById('export-btn');
+  btn.disabled = true;
+  btn.textContent = 'Exporting…';
+
+  try {
+    const resp = await fetch(`/api/reports/${encodeURIComponent(currentReportId)}/export`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      alert('Export failed: ' + (err.detail || resp.statusText));
+      btn.disabled = false;
+      btn.innerHTML = '&#8681; Export &amp; Delete';
+      return;
+    }
+
+    // Trigger browser download from the response blob
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const cd   = resp.headers.get('Content-Disposition') || '';
+    const fnMatch = cd.match(/filename="([^"]+)"/);
+    a.href     = url;
+    a.download = fnMatch ? fnMatch[1] : `liquidsystem-${currentReportId}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // Report was deleted server-side — update the UI
+    const deletedId = currentReportId;
+    currentReportId = null;
+    currentReport   = null;
+
+    // Remove from history dropdown
+    const sel = document.getElementById('report-select');
+    for (const opt of [...sel.options]) {
+      if (opt.value === deletedId) { sel.removeChild(opt); break; }
+    }
+
+    // Load next available report, or show empty state
+    const remaining = [...sel.options].filter(o => o.value);
+    if (remaining.length > 0) {
+      await loadReport(remaining[0].value);
+    } else {
+      showEmptyState();
+    }
+  } catch (err) {
+    alert('Export error: ' + err.message);
+    btn.disabled = false;
+    btn.innerHTML = '&#8681; Export &amp; Delete';
+  }
+}
+
 // ── Banner ─────────────────────────────────────────────────────────────────
 function showBanner(type, msg) {
   const el = document.getElementById('status-banner');
@@ -916,6 +1143,11 @@ function showReport() {
 function renderReport(data) {
   currentReportId = data.id;
   currentReport   = data;
+  chatReportId    = data.id;
+  document.getElementById('chat-context-label').textContent =
+    'Context: ' + fmtTimestamp(data.created_at);
+  const exportBtn = document.getElementById('export-btn');
+  if (exportBtn) { exportBtn.disabled = false; exportBtn.innerHTML = '&#8681; Export &amp; Delete'; }
   showReport();
 
   const sel = document.getElementById('report-select');
@@ -1532,7 +1764,7 @@ function renderMarkdown(text) {
   let s = esc(text);
   const lines = s.split('\n');
   const out   = [];
-  let inUl = false, inOl = false, inP = false;
+  let inUl = false, inOl = false, inP = false, inCode = false, codeLang = '', codeBuf = [];
 
   const flush = () => {
     if (inUl) { out.push('</ul>'); inUl = false; }
@@ -1541,6 +1773,23 @@ function renderMarkdown(text) {
   };
 
   for (const raw of lines) {
+    // Code fence handling
+    if (inCode) {
+      if (raw.startsWith('```')) {
+        out.push(`<pre><code class="language-${codeLang}">${codeBuf.join('\n')}</code></pre>`);
+        inCode = false; codeLang = ''; codeBuf = [];
+      } else {
+        codeBuf.push(raw);
+      }
+      continue;
+    }
+    if (raw.startsWith('```')) {
+      flush();
+      inCode = true;
+      codeLang = raw.slice(3).trim();
+      continue;
+    }
+
     const hm = raw.match(/^(#{1,4}) (.+)/);
     if (hm) {
       flush();
@@ -1572,6 +1821,10 @@ function renderMarkdown(text) {
     }
     if (!inP) { out.push('<p>'); inP = true; } else { out.push(' '); }
     out.push(inlineFmt(raw));
+  }
+  // Close any open code fence at end of stream
+  if (inCode && codeBuf.length) {
+    out.push(`<pre><code>${codeBuf.join('\n')}</code></pre>`);
   }
   flush();
   return out.join('');
@@ -1620,6 +1873,187 @@ function esc(s) {
     .replace(/</g,  '&lt;')
     .replace(/>/g,  '&gt;')
     .replace(/"/g,  '&quot;');
+}
+
+
+const CHAT_SESSION = 'web-' + Math.random().toString(36).slice(2, 10);
+let chatReportId   = null;   // set when a report is loaded
+let chatStreaming   = false;
+
+function sendSuggestion(el) {
+  document.getElementById('chat-input').value = el.textContent;
+  sendChat();
+}
+
+function chatKeydown(e) {
+  // Send on Enter (not Shift+Enter)
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+  // Auto-resize textarea
+  setTimeout(() => {
+    const ta = e.target;
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+  }, 0);
+}
+
+function appendMessage(role, content, id) {
+  const empty = document.getElementById('chat-empty');
+  if (empty) empty.remove();
+
+  const container = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+  div.id = id || '';
+
+  const avatarText = role === 'user' ? 'You' : 'AI';
+  const bubbleHtml = role === 'assistant'
+    ? `<div class="assessment-body">${renderMarkdown(content)}</div>`
+    : esc(content).replace(/\n/g, '<br>');
+
+  div.innerHTML = `
+    <div class="chat-avatar">${avatarText}</div>
+    <div class="chat-bubble">${bubbleHtml}</div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+function showTyping() {
+  const container = document.getElementById('chat-messages');
+  const empty = document.getElementById('chat-empty');
+  if (empty) empty.remove();
+
+  const div = document.createElement('div');
+  div.className = 'chat-msg assistant';
+  div.id = 'chat-typing';
+  div.innerHTML = `
+    <div class="chat-avatar">AI</div>
+    <div class="chat-bubble">
+      <div class="typing-indicator">
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+      </div>
+    </div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function removeTyping() {
+  document.getElementById('chat-typing')?.remove();
+}
+
+async function sendChat() {
+  if (chatStreaming) return;
+
+  const input = document.getElementById('chat-input');
+  const msg   = input.value.trim();
+  if (!msg) return;
+
+  input.value = '';
+  input.style.height = 'auto';
+
+  appendMessage('user', msg);
+
+  chatStreaming = true;
+  document.getElementById('chat-send-btn').disabled = true;
+  showTyping();
+
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message:    msg,
+        session_id: CHAT_SESSION,
+        report_id:  chatReportId,
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      removeTyping();
+      appendMessage('assistant', `Error: ${err.detail || 'Request failed'}`);
+      return;
+    }
+
+    removeTyping();
+
+    // Build streaming assistant bubble
+    const container = document.getElementById('chat-messages');
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'chat-msg assistant';
+    msgDiv.innerHTML = `<div class="chat-avatar">AI</div><div class="chat-bubble" id="chat-stream-bubble"></div>`;
+    container.appendChild(msgDiv);
+
+    const bubble    = document.getElementById('chat-stream-bubble');
+    const bodyDiv   = document.createElement('div');
+    bodyDiv.className = 'assessment-body';
+    bubble.appendChild(bodyDiv);
+
+    let rawText = '';
+    const reader  = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer    = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // Process complete SSE lines
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete last line
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const payload = JSON.parse(line.slice(6));
+          if (payload.error) {
+            bodyDiv.innerHTML = `<span class="text-danger">Error: ${esc(payload.error)}</span>`;
+            break;
+          }
+          if (payload.token) {
+            rawText += payload.token;
+            bodyDiv.innerHTML = renderMarkdown(rawText);
+            container.scrollTop = container.scrollHeight;
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (err) {
+    removeTyping();
+    appendMessage('assistant', `Connection error: ${err.message}`);
+  } finally {
+    chatStreaming = false;
+    document.getElementById('chat-send-btn').disabled = false;
+    document.getElementById('chat-input').focus();
+  }
+}
+
+async function resetChat() {
+  if (chatStreaming) return;
+  await fetch('/api/chat/reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: CHAT_SESSION }),
+  });
+  const container = document.getElementById('chat-messages');
+  container.innerHTML = `
+    <div class="chat-empty" id="chat-empty">
+      <h3>Ask Claude about your network</h3>
+      <p>Claude has full context of the latest audit report.</p>
+      <div class="chat-suggestions">
+        <span class="chat-suggestion" onclick="sendSuggestion(this)">What are my top security risks?</span>
+        <span class="chat-suggestion" onclick="sendSuggestion(this)">Which domains should I block first?</span>
+        <span class="chat-suggestion" onclick="sendSuggestion(this)">Are any devices doing DNS bypass?</span>
+        <span class="chat-suggestion" onclick="sendSuggestion(this)">Show me the Pi-hole block commands</span>
+        <span class="chat-suggestion" onclick="sendSuggestion(this)">What's my highest-risk device?</span>
+      </div>
+    </div>`;
 }
 </script>
 </body>
