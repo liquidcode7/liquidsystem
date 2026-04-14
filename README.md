@@ -60,7 +60,7 @@ A full-stack network security and privacy audit platform for a self-hosted home 
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/liquidcode7/pihole-audit
+git clone https://github.com/liquidcode7/liquidsystem
 cd pihole-audit
 uv sync
 ```
