@@ -1845,6 +1845,24 @@ function renderCorrelations(corrData) {
     const sourceTags = t.sources.map(s => `<span class="source-tag">${esc(s)}</span>`).join('');
     const internalFlag = t.internal ? ' <span class="badge badge-danger" style="font-size:0.65rem">INTERNAL</span>' : '';
     const detailLines = (t.details || []).map(d => `<div class="corr-detail">• ${esc(d)}</div>`).join('');
+
+    let reputationHtml = '';
+    const rep = t.reputation;
+    if (rep && rep.abuse_score != null) {
+      const score = rep.abuse_score;
+      const scoreColor = score >= 75 ? 'var(--critical)' : score >= 25 ? 'var(--warning)' : 'var(--dim)';
+      const cats = rep.abuse_categories && rep.abuse_categories.length
+        ? rep.abuse_categories.join(', ')
+        : 'none';
+      reputationHtml = `
+        <div style="margin-top:8px;padding:6px 10px;background:var(--surface-2);border-radius:4px;font-size:0.78rem;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+          <span style="color:var(--dim)">AbuseIPDB</span>
+          <span>Score: <strong style="color:${scoreColor}">${score}/100</strong></span>
+          ${rep.abuse_reports != null ? `<span style="color:var(--dim)">${rep.abuse_reports} report${rep.abuse_reports !== 1 ? 's' : ''}</span>` : ''}
+          <span style="color:var(--dim)">Categories: ${esc(cats)}</span>
+        </div>`;
+    }
+
     html += `
       <div class="section" style="margin-bottom:12px;padding:14px 16px">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -1855,6 +1873,7 @@ function renderCorrelations(corrData) {
           ${sourceTags}
         </div>
         <div style="margin-top:8px">${detailLines}</div>
+        ${reputationHtml}
       </div>`;
   }
 
