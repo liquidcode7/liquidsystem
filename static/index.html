@@ -571,8 +571,16 @@
     .modal-check-label { font-weight: 600; color: var(--text); }
     .modal-check-sub   { font-size: 0.72rem; color: var(--muted); font-family: monospace; }
     .modal-check-size  { font-size: 0.72rem; color: var(--muted); }
-    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
     .modal-result  { margin-top: 16px; }
+    .modal-box.wide { max-width: 700px; }
+    .meta-body { font-size: 0.85rem; line-height: 1.75; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+    .meta-body p { margin-bottom: 10px; }
+    .meta-body h1,.meta-body h2,.meta-body h3 { margin: 14px 0 6px; font-weight: 600; }
+    .meta-body ul { margin: 6px 0 6px 18px; }
+    .meta-body li { margin-bottom: 4px; }
+    .meta-body code { font-size: 0.8em; background: var(--surface-2); padding: 1px 4px; border-radius: 3px; }
+    .meta-body pre { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px; overflow-x: auto; font-size: 0.78rem; margin: 8px 0; }
 
     /* ── Utility ── */
     .hidden { display: none !important; }
@@ -850,6 +858,7 @@
     <select id="report-select" title="View a past report" onchange="onReportSelect()">
       <option value="">History…</option>
     </select>
+    <button class="btn btn-secondary" onclick="openReportsModal()" title="Select and manage multiple reports" style="font-size:0.78rem;padding:5px 12px">&#x2630; Manage</button>
     <button id="run-btn" class="btn btn-primary" onclick="runNow()">&#9654; Run Now</button>
   </div>
 </header>
@@ -1034,6 +1043,37 @@
       <button class="btn btn-secondary" onclick="closeClearModal()">Cancel</button>
       <button class="btn btn-danger" id="clear-exec-btn" onclick="executeClearLogs()">Clear Selected</button>
     </div>
+  </div>
+</div>
+
+<!-- Reports management modal -->
+<div id="reports-modal" class="modal-overlay hidden" onclick="onReportsOverlayClick(event)">
+  <div class="modal-box wide">
+    <h3>Manage Reports</h3>
+    <p>Select reports to export as a zip or run a cross-report meta-analysis.</p>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px" onclick="selectAllReports(true)">Select All</button>
+      <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px" onclick="selectAllReports(false)">Deselect All</button>
+      <span id="reports-sel-count" style="margin-left:auto;font-size:0.8rem;color:var(--muted);align-self:center"></span>
+    </div>
+    <div class="modal-checklist" id="reports-checklist" style="max-height:300px;overflow-y:auto"></div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-secondary" onclick="closeReportsModal()">Cancel</button>
+      <button class="btn btn-secondary" id="bulk-export-btn" onclick="bulkExport()">&#8681; Export Zip</button>
+      <button class="btn btn-primary"   id="meta-analysis-btn" onclick="runMetaAnalysis()">&#x1F9E0; Meta-Analysis</button>
+    </div>
+  </div>
+</div>
+
+<!-- Meta-analysis result modal -->
+<div id="meta-modal" class="modal-overlay hidden" onclick="onMetaOverlayClick(event)">
+  <div class="modal-box wide">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">Cross-Report Meta-Analysis</h3>
+      <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px" onclick="closeMetaModal()">Close</button>
+    </div>
+    <div id="meta-status" style="font-size:0.8rem;color:var(--muted);margin-bottom:10px"></div>
+    <div class="meta-body assessment-body" id="meta-body"></div>
   </div>
 </div>
 
@@ -2485,6 +2525,163 @@ async function sendChat() {
     document.getElementById('chat-input').focus();
     refreshMemoryCount();
   }
+}
+
+// ── Reports Management Modal ────────────────────────────────────────────────
+let allReports = [];   // populated from /api/reports
+
+async function openReportsModal() {
+  document.getElementById('reports-modal').classList.remove('hidden');
+  const list = document.getElementById('reports-checklist');
+  list.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">Loading…</div>';
+  try {
+    const resp = await fetch('/api/reports');
+    allReports = await resp.json();
+    renderReportsChecklist();
+  } catch (_) {
+    list.innerHTML = '<div style="color:var(--danger)">Failed to load reports.</div>';
+  }
+}
+
+function renderReportsChecklist() {
+  const list = document.getElementById('reports-checklist');
+  if (!allReports.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:0.82rem">No reports saved.</div>';
+    return;
+  }
+  list.innerHTML = allReports.map(r => `
+    <label class="modal-check" style="cursor:pointer">
+      <input type="checkbox" class="report-chk" value="${esc(r.id)}" onchange="updateReportSelCount()">
+      <div class="modal-check-info">
+        <div class="modal-check-label">${esc(fmtTimestamp(r.created_at))}</div>
+        <div class="modal-check-sub">${esc(r.id)}</div>
+      </div>
+    </label>`).join('');
+  updateReportSelCount();
+}
+
+function updateReportSelCount() {
+  const checked = document.querySelectorAll('.report-chk:checked').length;
+  const el = document.getElementById('reports-sel-count');
+  el.textContent = checked ? `${checked} selected` : '';
+}
+
+function selectAllReports(checked) {
+  document.querySelectorAll('.report-chk').forEach(cb => cb.checked = checked);
+  updateReportSelCount();
+}
+
+function getSelectedReportIds() {
+  return [...document.querySelectorAll('.report-chk:checked')].map(cb => cb.value);
+}
+
+function closeReportsModal() {
+  document.getElementById('reports-modal').classList.add('hidden');
+}
+
+function onReportsOverlayClick(e) {
+  if (e.target === document.getElementById('reports-modal')) closeReportsModal();
+}
+
+async function bulkExport() {
+  const ids = getSelectedReportIds();
+  if (!ids.length) { alert('Select at least one report.'); return; }
+  const btn = document.getElementById('bulk-export-btn');
+  btn.disabled = true;
+  btn.textContent = 'Exporting…';
+  try {
+    const resp = await fetch(`/api/reports/export-bulk?ids=${ids.map(encodeURIComponent).join(',')}`);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      alert('Export failed: ' + (err.detail || resp.statusText));
+      return;
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'liquidsystem-reports.zip';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    // Refresh history and close modal
+    await loadHistory();
+    await loadLatest();
+    closeReportsModal();
+  } catch (err) {
+    alert('Export error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '&#8681; Export Zip';
+  }
+}
+
+async function runMetaAnalysis() {
+  const ids = getSelectedReportIds();
+  if (ids.length < 2) { alert('Select at least 2 reports for a meta-analysis.'); return; }
+  closeReportsModal();
+
+  // Open meta modal and stream response
+  document.getElementById('meta-modal').classList.remove('hidden');
+  const body   = document.getElementById('meta-body');
+  const status = document.getElementById('meta-status');
+  body.innerHTML = '';
+  status.textContent = `Analyzing ${ids.length} reports…`;
+
+  try {
+    const resp = await fetch('/api/reports/meta-analysis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ report_ids: ids }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      body.innerHTML = `<span style="color:var(--danger)">Error: ${esc(err.detail || 'Request failed')}</span>`;
+      status.textContent = '';
+      return;
+    }
+
+    const reader  = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let rawText = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const payload = JSON.parse(line.slice(6));
+          if (payload.error) {
+            body.innerHTML = `<span style="color:var(--danger)">Error: ${esc(payload.error)}</span>`;
+            status.textContent = '';
+            return;
+          }
+          if (payload.token) {
+            rawText += payload.token;
+            body.innerHTML = renderMarkdown(rawText);
+          }
+          if (payload.done) status.textContent = `Analysis of ${ids.length} reports complete.`;
+        } catch (_) {}
+      }
+    }
+  } catch (err) {
+    body.innerHTML = `<span style="color:var(--danger)">Connection error: ${esc(err.message)}</span>`;
+    status.textContent = '';
+  }
+}
+
+function closeMetaModal() {
+  document.getElementById('meta-modal').classList.add('hidden');
+}
+
+function onMetaOverlayClick(e) {
+  if (e.target === document.getElementById('meta-modal')) closeMetaModal();
 }
 
 // ── Network Memory ──────────────────────────────────────────────────────────

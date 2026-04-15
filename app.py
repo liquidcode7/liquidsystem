@@ -177,6 +177,138 @@ async def api_reports_latest() -> JSONResponse:
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.get("/api/reports/export-bulk")
+async def api_reports_export_bulk(ids: str = "") -> StreamingResponse:
+    """Export multiple reports as a zip of self-contained HTML files, then delete them."""
+    import io
+    import zipfile as zf
+
+    report_ids = [r.strip() for r in ids.split(",") if r.strip()]
+    if not report_ids:
+        raise HTTPException(status_code=400, detail="No report IDs provided")
+    for rid in report_ids:
+        if not all(c.isalnum() or c in "-_" for c in rid):
+            raise HTTPException(status_code=400, detail=f"Invalid report ID: {rid}")
+
+    buf = io.BytesIO()
+    exported: list[str] = []
+    with zf.ZipFile(buf, "w", compression=zf.ZIP_DEFLATED) as z:
+        for rid in report_ids:
+            path = DATA_DIR / f"{rid}.json"
+            if not path.exists():
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                html = _render_export_html(data)
+                z.writestr(f"liquidsystem-{rid}.html", html)
+                exported.append(rid)
+            except Exception:
+                pass
+
+    # Delete exported reports
+    for rid in exported:
+        (DATA_DIR / f"{rid}.json").unlink(missing_ok=True)
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.read()]),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="liquidsystem-reports.zip"'},
+    )
+
+
+class MetaAnalysisRequest(BaseModel):
+    report_ids: list[str]
+
+
+@app.post("/api/reports/meta-analysis")
+async def api_meta_analysis(req: MetaAnalysisRequest) -> StreamingResponse:
+    """Stream a Claude meta-analysis across multiple selected reports."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY not set")
+
+    for rid in req.report_ids:
+        if not all(c.isalnum() or c in "-_" for c in rid):
+            raise HTTPException(status_code=400, detail=f"Invalid report ID: {rid}")
+
+    from assessment import _compress_historical_report
+
+    summaries: list[str] = []
+    for rid in sorted(req.report_ids):
+        path = DATA_DIR / f"{rid}.json"
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            summaries.append(_compress_historical_report(data))
+        except Exception:
+            pass
+
+    if not summaries:
+        raise HTTPException(status_code=404, detail="No valid reports found")
+
+    user_ctx = _format_user_context(_load_user_context())
+    user_ctx_block = f"\n\nUser-provided context:\n{user_ctx}" if user_ctx else ""
+
+    system = (
+        "You are a network security analyst performing a longitudinal meta-analysis "
+        "of a home lab network across multiple scan reports. "
+        "Identify trends, recurring issues, improvements over time, and anything that "
+        "has changed significantly. Be specific — cite dates, counts, and IPs. "
+        "The operator runs OPNsense, Pi-hole, Proxmox, Suricata, and self-hosted services."
+        + user_ctx_block
+    )
+
+    user_prompt = (
+        f"Perform a comprehensive meta-analysis across these {len(summaries)} network scan reports "
+        f"(oldest → newest).\n\n"
+        "Cover:\n"
+        "1. **Overall trend** — Is the network getting more or less secure over time?\n"
+        "2. **Recurring issues** — What problems appear in multiple reports?\n"
+        "3. **Resolved issues** — What was flagged before but is no longer a concern?\n"
+        "4. **Anomalies** — Anything that spiked or appeared suddenly in one report?\n"
+        "5. **Recommendations** — Top 3 actions based on the full picture, not just the latest scan.\n\n"
+        "--- REPORTS ---\n\n" + "\n\n".join(summaries)
+    )
+
+    async def event_stream():
+        client = anthropic.Anthropic(api_key=api_key)
+        queue: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+
+        def stream_in_thread():
+            try:
+                with client.messages.stream(
+                    model=MODEL,
+                    max_tokens=4096,
+                    system=system,
+                    messages=[{"role": "user", "content": user_prompt}],
+                ) as stream:
+                    for chunk in stream.text_stream:
+                        loop.call_soon_threadsafe(queue.put_nowait, {"token": chunk})
+            except Exception as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, {"error": str(exc)})
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        executor = ThreadPoolExecutor(max_workers=1)
+        loop.run_in_executor(executor, stream_in_thread)
+
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            if "error" in item:
+                yield f"data: {json.dumps({'error': item['error']})}\n\n"
+                return
+            yield f"data: {json.dumps({'token': item['token']})}\n\n"
+
+        yield f"data: {json.dumps({'done': True})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @app.get("/api/reports/{report_id}")
 async def api_report(report_id: str) -> JSONResponse:
     if not all(c.isalnum() or c in "-_" for c in report_id):
