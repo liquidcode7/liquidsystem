@@ -673,10 +673,7 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-      scroll-behavior: smooth;
-      overflow-anchor: none;
     }
-    #chat-anchor { height: 1px; flex-shrink: 0; }
     .chat-msg {
       display: flex;
       gap: 12px;
@@ -978,7 +975,6 @@
             <span class="chat-suggestion" onclick="sendSuggestion(this)">What's my highest-risk device?</span>
           </div>
         </div>
-        <div id="chat-anchor"></div>
       </div>
       <div class="chat-input-row">
         <textarea id="chat-input" rows="1" placeholder="Ask a follow-up question about your network…" onkeydown="chatKeydown(event)"></textarea>
@@ -2297,9 +2293,10 @@ async function blockDomain(btn, domain) {
 // ── Chat ───────────────────────────────────────────────────────────────────
 
 function scrollToBottom() {
+  const container = document.getElementById('chat-messages');
+  if (!container) return;
   requestAnimationFrame(() => {
-    const anchor = document.getElementById('chat-anchor');
-    if (anchor) anchor.scrollIntoView({ block: 'end' });
+    container.scrollTop = container.scrollHeight;
   });
 }
 
